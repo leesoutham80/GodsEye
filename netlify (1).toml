@@ -1,0 +1,23 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[[headers]]
+  for = "/signals.json"
+  [headers.values]
+    Cache-Control = "public, max-age=60"
+    Access-Control-Allow-Origin = "*"
+
+[[headers]]
+  for = "/.netlify/functions/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Cache-Control = "public, max-age=30"
+
+# Scheduled function - runs every 6 hours
+[[functions]]
+  path = "/.netlify/functions/spotlight"
+  schedule = "@hourly"
+  # Note: Netlify cron syntax doesn't support "every 6 hours" directly
+  # This runs hourly but the function can check if 6 hours have passed
+  # Or use external cron service to trigger: 0 */6 * * *
