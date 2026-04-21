@@ -1,0 +1,11 @@
+{
+  "name": "godseye-live",
+  "version": "61.1.0",
+  "private": true,
+  "dependencies": {
+    "@netlify/blobs": "^10.7.4",
+    "@netlify/functions": "^3.0.0",
+    "@anthropic-ai/sdk": "^0.32.0",
+    "node-fetch": "^2.7.0"
+  }
+}
