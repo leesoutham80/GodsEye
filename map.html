@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GodsEye · Theatre Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#060b12; --panel:rgba(6,11,18,.94); --border:rgba(255,255,255,.12);
+  --gold:#d4a017; --text:#e8e6e0; --muted:#8a8f98;
+  --red:#ff6b6b; --green:#49d39c; --blue:#5aa7ff; --amber:#ffd93d; --purple:#c49fff;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;background:var(--bg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--text);overflow:hidden}
+#wrap{position:fixed;inset:0}
+#map{position:absolute;inset:0;background:#04070c}
+.leaflet-container{background:#04070c!important;font-family:inherit}
+
+/* ---------- top bar: minimal, non-blocking ---------- */
+#topbar{position:absolute;top:0;left:0;right:0;z-index:1200;display:flex;align-items:center;gap:8px;
+  padding:6px 10px;pointer-events:none}
+#topbar>*{pointer-events:auto}
+.brand{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:5px 10px;
+  font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--gold)}
+.brand span{color:var(--muted);font-weight:600;letter-spacing:.06em;margin-left:6px;font-size:9px}
+.tb-btn{background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);
+  padding:6px 10px;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;user-select:none}
+.tb-btn:active{background:rgba(212,160,23,.15)}
+.tb-btn.on{color:var(--gold);border-color:rgba(212,160,23,.5)}
+#tb-spacer{flex:1}
+
+/* ---------- layers drawer ---------- */
+#drawer{position:absolute;top:0;bottom:0;left:0;width:262px;max-width:82vw;z-index:1300;
+  background:var(--panel);border-right:1px solid var(--border);transform:translateX(-100%);
+  transition:transform .22s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 40px}
+#drawer.open{transform:translateX(0)}
+#drawer h3{font-size:9px;letter-spacing:.16em;color:var(--gold);text-transform:uppercase;margin:14px 0 6px;font-weight:800}
+#drawer h3:first-child{margin-top:2px}
+.lyr{display:flex;align-items:center;gap:8px;padding:7px 4px;cursor:pointer;border-radius:4px;font-size:11.5px}
+.lyr:active{background:rgba(255,255,255,.05)}
+.lyr .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.lyr .chk{width:15px;height:15px;border:1px solid var(--border);border-radius:3px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--gold)}
+.lyr.on .chk{border-color:var(--gold);background:rgba(212,160,23,.12)}
+.lyr .sub{margin-left:auto;font-size:8px;color:var(--muted);letter-spacing:.04em}
+.lyr.radio .chk{border-radius:50%}
+.drawer-note{font-size:9px;color:var(--muted);line-height:1.5;margin-top:6px;padding:6px;
+  border:1px solid var(--border);border-radius:4px}
+.datebox{display:flex;align-items:center;gap:6px;margin:4px 0 2px;font-size:10px}
+.datebox input{background:#0b1220;border:1px solid var(--border);border-radius:4px;color:var(--text);
+  padding:4px 6px;font-size:11px;font-family:inherit;color-scheme:dark;flex:1}
+#drawer-close{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--muted);
+  font-size:16px;cursor:pointer;padding:4px}
+
+/* ---------- dossier bottom sheet ---------- */
+#sheet{position:absolute;left:0;right:0;bottom:0;z-index:1400;background:var(--panel);
+  border-top:1px solid var(--gold);max-height:62%;transform:translateY(102%);transition:transform .24s ease;
+  display:flex;flex-direction:column;border-radius:10px 10px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.6)}
+#sheet.open{transform:translateY(0)}
+#sheet-grab{padding:8px 14px 4px;flex-shrink:0;cursor:pointer}
+#sheet-grab .bar{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,.25);margin:0 auto 8px}
+#sheet-head{display:flex;align-items:baseline;gap:10px}
+#sheet-title{font-size:15px;font-weight:800;color:var(--gold);letter-spacing:.02em}
+#sheet-sub{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+#sheet-close{margin-left:auto;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:2px 6px}
+#sheet-tabs{display:flex;gap:2px;padding:6px 12px 0;flex-shrink:0;overflow-x:auto}
+.stab{padding:6px 10px;font-size:9px;font-weight:800;letter-spacing:.1em;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;white-space:nowrap;text-transform:uppercase}
+.stab.on{color:var(--gold);border-bottom-color:var(--gold)}
+#sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 14px 24px;font-size:12px;line-height:1.55}
+#sheet-body .kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+#sheet-body .kv b{color:var(--muted);font-weight:600;font-size:10.5px;letter-spacing:.04em;flex-shrink:0}
+#sheet-body .kv span{text-align:right}
+#sheet-body .strike{padding:7px 0;border-bottom:1px solid rgba(255,107,107,.15)}
+#sheet-body .strike .sd{color:var(--red);font-weight:800;font-size:10px;letter-spacing:.08em}
+#sheet-body .note{margin-top:10px;padding:8px;border-left:2px solid var(--gold);background:rgba(212,160,23,.06);
+  font-size:11px;color:var(--text)}
+#sheet-body p{margin:6px 0}
+
+/* ---------- markers ---------- */
+.ge-mk{border-radius:50%;border:1.5px solid rgba(255,255,255,.85);cursor:pointer;
+  box-shadow:0 0 8px rgba(0,0,0,.7)}
+.ge-lbl{background:none!important;border:none!important;box-shadow:none!important;padding:0!important;
+  color:#fff;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none;
+  text-shadow:0 0 5px #000,0 0 3px #000,1px 1px 2px #000,-1px -1px 2px #000}
+.leaflet-tooltip.ge-lbl::before{display:none!important}
+.ac-icon{transition:transform .3s linear}
+.v-chev{font-size:13px;text-shadow:0 0 4px #000;display:inline-block}
+.v-sanc{animation:sancpulse 1.6s ease-in-out infinite;border-radius:50%;box-shadow:0 0 0 2px rgba(255,59,59,.9)}
+@keyframes sancpulse{0%,100%{box-shadow:0 0 0 2px rgba(255,59,59,.9)}50%{box-shadow:0 0 0 6px rgba(255,59,59,.25)}}
+.leaflet-control-zoom{margin-top:52px!important}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--gold)!important;
+  border-color:var(--border)!important;width:30px!important;height:30px!important;line-height:30px!important}
+.leaflet-control-attribution{background:rgba(6,11,18,.75)!important;color:var(--muted)!important;font-size:8px!important}
+.leaflet-control-attribution a{color:var(--blue)!important}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:6px}
+.leaflet-popup-tip{background:var(--panel)}
+.leaflet-popup-content{font-size:11px;line-height:1.5;margin:10px 12px}
+
+#status{position:absolute;bottom:6px;left:6px;z-index:1100;background:var(--panel);border:1px solid var(--border);
+  border-radius:4px;padding:3px 8px;font-size:8.5px;color:var(--muted);letter-spacing:.05em;max-width:70vw;
+  pointer-events:none;display:none}
+#status.show{display:block}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="map"></div>
+
+  <div id="topbar">
+    <div class="brand">GODSEYE<span>THEATRE MAP</span></div>
+    <button class="tb-btn" id="btn-layers">◧ LAYERS</button>
+    <div id="tb-spacer"></div>
+    <button class="tb-btn" id="btn-home">GULF</button>
+    <button class="tb-btn" id="btn-fs">⛶ FULLSCREEN</button>
+  </div>
+
+  <div id="drawer">
+    <button id="drawer-close">✕</button>
+    <h3>Basemap</h3>
+    <div id="basemaps"></div>
+    <h3>Live OSINT</h3>
+    <div id="live-layers"></div>
+    <h3>Daily satellite (GIBS)</h3>
+    <div class="datebox"><label style="color:var(--muted);font-size:9px">DATE</label><input type="date" id="gibs-date"></div>
+    <div id="gibs-layers"></div>
+    <div class="drawer-note">GIBS layers are daily global passes — VIIRS ~750 m true colour and thermal.</div>
+    <h3>Sentinel-2 scene (10–20 m)</h3>
+    <div id="sentinel-btns" style="display:flex;gap:6px;margin:4px 0">
+      <button class="tb-btn" id="s2-tc" style="flex:1">TRUE COLOUR</button>
+      <button class="tb-btn" id="s2-swir" style="flex:1">SWIR</button>
+      <button class="tb-btn" id="s2-clear" style="width:34px">✕</button>
+    </div>
+    <div class="drawer-note">Renders the selected date over the current map view via Sentinel Hub. Uses the date picker above. Zoom to the target (Kharg, Asaluyeh) first — tighter view, sharper scene. SWIR is the fire/anomaly composite (B12/B8A/B04).</div>
+    <h3>Theatre</h3>
+    <div id="theatre-layers"></div>
+  </div>
+
+  <div id="sheet">
+    <div id="sheet-grab"><div class="bar"></div>
+      <div id="sheet-head">
+        <div><div id="sheet-title"></div><div id="sheet-sub"></div></div>
+        <button id="sheet-close">✕</button>
+      </div>
+    </div>
+    <div id="sheet-tabs"></div>
+    <div id="sheet-body"></div>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<script>
+/* =========================================================
+   GodsEye Theatre Map
+   Satellite basemaps · fullscreen · FIRMS live · GIBS daily
+   OpenSky live air picture · infrastructure dossiers
+   ========================================================= */
+
+var map = L.map('map', {
+  zoomControl: true, attributionControl: true,
+  markerZoomAnimation: false, fadeAnimation: false,
+  worldCopyJump: true
+}).setView([26.6, 53.5], 7);
+
+/* ---------------- BASEMAPS ---------------- */
+var BASE = {
+  esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 19, attribution: 'Esri, Maxar, Earthstar Geographics'
+  }),
+  s2cloudless: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg', {
+    maxZoom: 15, attribution: 'Sentinel-2 cloudless — s2maps.eu by EOX (Contains modified Copernicus data)'
+  }),
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19, attribution: 'CARTO / OpenStreetMap'
+  }),
+  osm: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: 'OpenStreetMap'
+  })
+};
+var labelsOverlay = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, attribution: '', pane: 'shadowPane'
+});
+var currentBase = 'esri';
+BASE.esri.addTo(map);
+labelsOverlay.addTo(map);   // place names over satellite by default
+
+/* ---------------- GIBS daily layers ---------------- */
+function yesterdayISO(){
+  var d = new Date(Date.now() - 36e5*30); // 30h back — GIBS lags
+  return d.toISOString().slice(0,10);
+}
+var gibsDate = yesterdayISO();
+function gibsUrl(layer, fmt, matrix){
+  return 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/' + layer + '/default/' + gibsDate +
+         '/' + matrix + '/{z}/{y}/{x}.' + fmt;
+}
+var GIBS_DEFS = {
+  viirsTrue: { id:'viirsTrue', name:'VIIRS True Colour (NOAA-20)', kind:'wmts', layer:'VIIRS_NOAA20_CorrectedReflectance_TrueColor', fmt:'jpg', matrix:'GoogleMapsCompatible_Level9', maxZoom:9 },
+  viirsFires:{ id:'viirsFires', name:'VIIRS Thermal Anomalies 375 m', kind:'wms', layer:'VIIRS_NOAA20_Thermal_Anomalies_375m_All' }
+};
+var gibsLayers = {};
+function buildGibs(def){
+  if (def.kind === 'wms'){
+    return L.tileLayer.wms('https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi', {
+      layers: def.layer, format: 'image/png', transparent: true,
+      time: gibsDate, attribution: 'NASA GIBS', bounds: [[15,40],[38,70]]
+    });
+  }
+  return L.tileLayer(gibsUrl(def.layer, def.fmt, def.matrix), {
+    maxNativeZoom: def.maxZoom, maxZoom: 19,
+    attribution: 'NASA GIBS', bounds: [[15,40],[38,70]]
+  });
+}
+function refreshGibsDates(){
+  for (var k in gibsLayers){
+    if (map.hasLayer(gibsLayers[k])) map.removeLayer(gibsLayers[k]);
+    gibsLayers[k] = buildGibs(GIBS_DEFS[k]);
+    if (LSTATE[k]) gibsLayers[k].addTo(map);
+  }
+}
+
+/* ---------------- status line ---------------- */
+var statusEl = document.getElementById('status');
+var statusT = null;
+function setStatus(msg, sticky){
+  statusEl.textContent = msg;
+  statusEl.classList.add('show');
+  clearTimeout(statusT);
+  if (!sticky) statusT = setTimeout(function(){ statusEl.classList.remove('show'); }, 6000);
+}
+
+/* ---------------- FIRMS live (own function) ---------------- */
+var firmsGroup = L.layerGroup();
+var firmsLoaded = false;
+function loadFirms(){
+  setStatus('FIRMS: fetching…', true);
+  fetch('/.netlify/functions/firms')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      firmsGroup.clearLayers();
+      if (!d.success || !d.points || !d.points.length){
+        setStatus('FIRMS: ' + (d.error || 'no detections in window'));
+        return;
+      }
+      d.points.forEach(function(p){
+        var col = p.conf === 'h' ? '#ff3b3b' : p.conf === 'n' ? '#ff9f43' : '#ffd93d';
+        var r = Math.max(3, Math.min(14, 3 + Math.sqrt(p.frp || 0)));
+        L.circleMarker([p.lat, p.lon], {
+          radius: r, color: col, weight: 1, fillColor: col, fillOpacity: .55
+        }).bindPopup(
+          '<b style="color:#ff6b6b">FIRMS THERMAL DETECTION</b><br>' +
+          'FRP: <b>' + p.frp + ' MW</b> · conf ' + p.conf.toUpperCase() + '<br>' +
+          p.date + ' ' + String(p.time).padStart(4,'0') + 'Z · ' + p.sat + ' · ' + (p.dn === 'D' ? 'day' : 'night') + ' pass<br>' +
+          p.lat.toFixed(3) + '°N ' + p.lon.toFixed(3) + '°E'
+        ).addTo(firmsGroup);
+      });
+      var tag = d.cached ? (d.stale ? 'stale cache' : 'cached') : 'live';
+      setStatus('FIRMS: ' + d.count + ' detections · ' + tag + ' · as of ' + (d.as_of||'').slice(0,16).replace('T',' ') + 'Z');
+      firmsLoaded = true;
+    })
+    .catch(function(e){ setStatus('FIRMS: fetch failed — ' + e.message); });
+}
+
+/* ---------------- OpenSky live air picture ---------------- */
+/* Anonymous REST — works without credentials, rate-limited.
+   Upgrades automatically to authenticated once OAuth lands (server proxy). */
+var oskyGroup = L.layerGroup();
+var oskyTimer = null;
+var OSKY_BBOX = { lamin: 22.5, lamax: 31.5, lomin: 45.5, lomax: 63.0 };
+function planeIcon(track, onGround){
+  var col = onGround ? '#8a8f98' : '#5aa7ff';
+  return L.divIcon({
+    className: '',
+    html: '<div class="ac-icon" style="transform:rotate(' + (track||0) + 'deg);font-size:15px;color:' + col +
+          ';text-shadow:0 0 4px #000">➤</div>',
+    iconSize: [16,16], iconAnchor: [8,8]
+  });
+}
+function loadOpenSky(){
+  var u = 'https://opensky-network.org/api/states/all?lamin=' + OSKY_BBOX.lamin +
+          '&lomin=' + OSKY_BBOX.lomin + '&lamax=' + OSKY_BBOX.lamax + '&lomax=' + OSKY_BBOX.lomax;
+  fetch(u)
+    .then(function(r){
+      if (r.status === 429) throw new Error('rate-limited (anonymous quota) — retrying next cycle');
+      return r.json();
+    })
+    .then(function(d){
+      oskyGroup.clearLayers();
+      var states = d.states || [];
+      states.forEach(function(s){
+        var lon = s[5], lat = s[6];
+        if (lat == null || lon == null) return;
+        var cs = (s[1]||'').trim() || '—';
+        var alt = s[13] != null ? s[13] : s[7];
+        L.marker([lat, lon], { icon: planeIcon((s[10]||0) - 90, s[8]), zIndexOffset: 300 })
+          .bindPopup(
+            '<b style="color:#5aa7ff">✈ ' + cs + '</b><br>' +
+            'Origin: ' + (s[2]||'?') + ' · ICAO24 ' + s[0] + '<br>' +
+            'Alt: ' + (alt != null ? Math.round(alt) + ' m' : 'n/a') +
+            ' · GS: ' + (s[9] != null ? Math.round(s[9]*1.944) + ' kn' : 'n/a') +
+            ' · Trk: ' + (s[10] != null ? Math.round(s[10]) + '°' : 'n/a') + '<br>' +
+            (s[8] ? '<span style="color:#8a8f98">on ground</span>' : 'airborne')
+          ).addTo(oskyGroup);
+      });
+      setStatus('OpenSky: ' + states.length + ' aircraft over theatre (anonymous feed, 60 s refresh)');
+    })
+    .catch(function(e){ setStatus('OpenSky: ' + e.message); });
+}
+function oskyStart(){ loadOpenSky(); oskyTimer = setInterval(loadOpenSky, 60000); }
+function oskyStop(){ clearInterval(oskyTimer); oskyTimer = null; }
+
+/* ---------------- INFRASTRUCTURE DOSSIERS ---------------- */
+/* Deep, clickable records. GodsEye canon for the 2026 strike ledger. */
+var INFRA = [
+{
+  id:'southpars_field', lat:26.65, lon:52.10, cat:'field', name:'South Pars — offshore field',
+  sub:'RESERVOIR · NEVER STRUCK',
+  colour:'#49d39c',
+  tabs:{
+    'Overview':[
+      ['Structure','Offshore gas condensate reservoir, Persian Gulf'],
+      ['Shared with','Qatar (North Field — same geological structure)'],
+      ['Iranian sector','~3,700 km² of a ~9,700 km² field'],
+      ['Discovered','1990 (Iranian sector)'],
+      ['Operator','Pars Oil & Gas Company (POGC), NIOC subsidiary'],
+      ['Reserves (IR sector)','~14 tcm gas · ~18 bn bbl condensate'],
+      ['Development','24 phases; Phase 11 last onstream (first gas 2023)'],
+      ['Share of Iran gas','~70–75% of national production']
+    ],
+    'Economics':[
+      ['Development cost','~$80bn+ cumulative across 24 phases'],
+      ['Output','~700+ mcm/d raw gas at full field rate'],
+      ['Condensate','~750,000 b/d capacity — the exportable revenue stream'],
+      ['Revenue model','Gas largely domestic (subsidised); condensate + LPG exports earn the FX'],
+      ['Phase 11 history','Total → CNPC exit under 2018 sanctions; Petropars completed alone']
+    ],
+    'Strikes':[
+      ['—','THE FIELD HAS NEVER BEEN STRUCK. Every "South Pars hit" headline in this war refers to the onshore trains at Asaluyeh. The distinction is load-bearing: reservoir intact = recoverable capacity intact = the wrapper thesis holds.']
+    ],
+    'GodsEye read':'The field is the prize, the trains are the valve. Strikes on Asaluyeh throttle throughput without touching recoverable reserves — pressure on revenue, not on the asset. Watch condensate loadings at Asaluyeh berths as the true output telemetry.'
+  }
+},
+{
+  id:'asaluyeh', lat:27.47, lon:52.61, cat:'processing', name:'Asaluyeh — South Pars onshore trains',
+  sub:'PSEEZ PROCESSING HUB · STRUCK ×2',
+  colour:'#ff6b6b',
+  tabs:{
+    'Overview':[
+      ['Structure','Pars Special Economic Energy Zone (PSEEZ) — gas refineries, petrochemical complexes, condensate export berths'],
+      ['Function','Processes South Pars offshore gas: sweetening, NGL separation, condensate stabilisation'],
+      ['Built','Phased from late 1990s; refineries tied 1:1 to field phases'],
+      ['Operator','POGC refineries + NPC petrochemical complexes'],
+      ['Workforce','Tens of thousands; company town economy'],
+      ['Capacity','~14 refinery complexes processing the ~700 mcm/d field stream']
+    ],
+    'Economics':[
+      ['Petrochemical share','Asaluyeh complexes ≈ half of Iran petrochemical output'],
+      ['Petrochem revenue','Iran petrochemical exports ~$12–14bn/yr pre-war — largest non-oil FX earner'],
+      ['Condensate exports','Primary crude-adjacent revenue from the site'],
+      ['Domestic load','Feeds national grid + household gas — winter shortfall risk when trains go down']
+    ],
+    'Strikes':[
+      ['18 MAR 2026','Israeli strike (US-coordinated) on refineries 4 and 7 + treatment trains. ~14% of output (~100 mcm/d) taken offline. Qatar and UAE condemned — shared North Field exposure.'],
+      ['6 APR 2026','Israeli strike on the Asaluyeh petrochemical plant — ~50% of Iran petrochemical output affected. Part of US–Israeli wave, 25+ killed.'],
+      ['JUL 2026','Phase 8 US strike waves (~300+ targets across three waves) — battle-damage attribution at Asaluyeh still being resolved against imagery.']
+    ],
+    'GodsEye read':'Field vs trains, always. Both strikes hit processing, never the reservoir. Repair timelines on sweetening trains run months, not weeks — sulphur handling is the bottleneck. Track flare signatures on FIRMS: a train restart shows as a thermal step-change days before any announcement.'
+  }
+},
+{
+  id:'kharg', lat:29.24, lon:50.31, cat:'terminal', name:'Kharg Island',
+  sub:'CRUDE EXPORT TERMINAL · STRUCK MAR · MAY EVENT OPEN',
+  colour:'#ff9f43',
+  tabs:{
+    'Overview':[
+      ['Function','~90% of Iranian crude exports pre-war'],
+      ['Facilities','T-jetty (eastern) + Sea Island (western) berths; ~20+ storage tanks'],
+      ['Capacity','Nameplate ~5m b/d loading; recent actual ~1.5–1.8m b/d'],
+      ['Built','1960s (NIOC); rebuilt after Iraqi strikes in the 1980s Tanker War'],
+      ['Operator','NIOC / Iranian Oil Terminals Company'],
+      ['History','Struck repeatedly 1985–88 by Iraq; kept loading throughout — precedent for resilience under fire']
+    ],
+    'Economics':[
+      ['Revenue role','The single choke on Iranian oil FX — no Kharg, no meaningful crude export'],
+      ['Alternative','Jask (Goreh–Jask line) built precisely to de-risk Kharg + bypass Hormuz — capacity ~300k–1m b/d, underused'],
+      ['Buyers','Overwhelmingly China (teapot refiners via shadow fleet) pre-closure']
+    ],
+    'Strikes':[
+      ['13 MAR 2026','US raid hit military targets on the island, sparing oil infrastructure "for reasons of decency."'],
+      ['6 MAY 2026','Thermal event at southern loading cluster. FIRMS shows thermal REDUCTION pre-6 May; 6 May plumes confirmed non-routine (discrete elongated smoke, brown-black cores, directional). Production-throttle → pressure-buildup → failure sequence is the working read — March 13-week FIRMS screenshots still to confirm. NOT YET FOLDED AS SETTLED.'],
+      ['NOTE','Dark pools around the terminal are pre-existing (Feb 2025 baseline). The CENTCOM contradiction rests on SWIR elevation vs baseline + FIRMS thermal peak, not pool appearance.']
+    ],
+    'GodsEye read':'The May event is the live question — "Is Kharg Burning?" draft holds until the FIRMS reduction sequence is confirmed. Loadings vs storage: with the strait administratively closed, tank tops arrive on a clock regardless of what burned.'
+  }
+},
+{
+  id:'bandarabbas', lat:27.14, lon:56.21, cat:'port', name:'Bandar Abbas / Shahid Rajaee',
+  sub:'PORT + NAVAL BASE · STRUCK',
+  colour:'#c49fff',
+  tabs:{
+    'Overview':[
+      ['Function','Iran\u2019s largest commercial container port (Shahid Rajaee) + IRIN/IRGC naval headquarters'],
+      ['Throughput','~2.5m TEU/yr pre-war — ~85% of Iranian container traffic'],
+      ['Population','500,000+ city'],
+      ['Position','Directly on the Strait — the administrative seat of Iranian strait control']
+    ],
+    'Strikes':[
+      ['2026','Struck — major civilian port and naval base. Commercial shipping halted; food import disruption to the population centre.']
+    ],
+    'GodsEye read':'Dual-use in the hardest sense: the same anchorage services the PGSA fee regime and the country\u2019s container imports. Port call data here is the cleanest single proxy for whether the eastern corridor is actually functioning.'
+  }
+},
+{
+  id:'jask', lat:25.64, lon:57.77, cat:'terminal', name:'Jask Terminal (Goreh–Jask)',
+  sub:'HORMUZ-BYPASS EXPORT LINE',
+  colour:'#49d39c',
+  tabs:{
+    'Overview':[
+      ['Function','Crude export terminal OUTSIDE the Strait — Gulf of Oman coast'],
+      ['Pipeline','Goreh–Jask, ~1,000 km, inaugurated 2021'],
+      ['Capacity','Design ~1m b/d; operational reality far lower'],
+      ['Cost','~$2bn'],
+      ['Strategic logic','Built explicitly so Iran can export even with Hormuz closed']
+    ],
+    'Strikes':[
+      ['—','No confirmed strikes on the terminal itself in the 2026 exchange. Its untouched status while Kharg absorbs events is itself a data point — claiming-as-tell applies to targeting too.']
+    ],
+    'GodsEye read':'The tell: if Iran ramps Jask loadings while the PGSA holds the strait shut, the closure is revealed as a weapon Iran can fire without wounding itself. Watch for tanker calls at 25.6N 57.8E on TankerMap.'
+  }
+},
+{
+  id:'raslaffan', lat:25.90, lon:51.55, cat:'processing', name:'Ras Laffan (Qatar)',
+  sub:'NORTH FIELD LNG · SAME RESERVOIR',
+  colour:'#5aa7ff',
+  tabs:{
+    'Overview':[
+      ['Function','World\u2019s largest LNG export complex — QatarEnergy'],
+      ['Field','North Field — the Qatari side of the same reservoir as South Pars'],
+      ['Capacity','77 mtpa, expanding to 142 mtpa (North Field East + South, ~$45bn programme)'],
+      ['Revenue','~$65–80bn/yr LNG exports (price-dependent)'],
+      ['Exposure','Every cargo transits Hormuz — zero pipeline alternative']
+    ],
+    'Strikes':[
+      ['—','Not struck. Qatar condemned the 18 Mar Asaluyeh strike precisely because the shared reservoir makes escalation on the field a direct Qatari interest.']
+    ],
+    'GodsEye read':'The reservoir is jointly owned physics. Any strike logic that touches the offshore field puts Doha — and every LNG buyer in Asia — inside the blast radius of the decision. This is the structural reason the field stays unstruck while the trains burn.'
+  }
+},
+{
+  id:'rastanura', lat:26.64, lon:50.16, cat:'terminal', name:'Ras Tanura (Saudi Arabia)',
+  sub:'WORLD\u2019S LARGEST CRUDE TERMINAL',
+  colour:'#5aa7ff',
+  tabs:{
+    'Overview':[
+      ['Function','Saudi Aramco primary export terminal'],
+      ['Capacity','~6.5m b/d loading'],
+      ['Built','1939 onward; refinery 550k b/d'],
+      ['Exposure','Inside the Gulf — everything loads through Hormuz'],
+      ['Alternative','East–West pipeline to Yanbu (~5m b/d) is the Kingdom\u2019s bypass']
+    ],
+    'Strikes':[
+      ['—','Not struck in the 2026 exchange. Iranian retaliation has so far spared GCC export infrastructure — restraint that is itself a signal about who Tehran\u2019s quarrel is with.']
+    ],
+    'GodsEye read':'The un-struck terminal is the inaction reading: Iran holding fire on Ras Tanura keeps the GCC states as pressure-transmitters on Washington rather than co-belligerents. If this changes, every escalation model resets.'
+  }
+},
+{
+  id:'abqaiq', lat:25.94, lon:49.68, cat:'processing', name:'Abqaiq (Saudi Arabia)',
+  sub:'CRUDE STABILISATION · 2019 PRECEDENT',
+  colour:'#5aa7ff',
+  tabs:{
+    'Overview':[
+      ['Function','World\u2019s largest crude stabilisation plant — Aramco'],
+      ['Throughput','~7m b/d — roughly 7% of global supply passes through this one site'],
+      ['Precedent','14 Sep 2019 drone/cruise strike halved Saudi output overnight; restored in weeks']
+    ],
+    'Strikes':[
+      ['—','Not struck in 2026. The 2019 attack is the standing proof-of-concept for what a single processing-node hit does to global supply.']
+    ],
+    'GodsEye read':'Abqaiq 2019 is the calibration event for every "what if" in this war: 5.7m b/d offline from one strike, ~15% Brent spike, weeks to recover. It is why processing nodes, not fields, are the currency of escalation.'
+  }
+},
+{
+  id:'fujairah', lat:25.12, lon:56.35, cat:'port', name:'Fujairah (UAE)',
+  sub:'BUNKERING HUB · OUTSIDE THE STRAIT',
+  colour:'#5aa7ff',
+  tabs:{
+    'Overview':[
+      ['Function','World #2–3 bunkering port; oil storage ~10m+ m³; UAE\u2019s Hormuz-bypass outlet'],
+      ['Pipeline','Habshan–Fujairah ADCOP, 1.5m b/d — Abu Dhabi crude exits without the strait'],
+      ['Role in war','Ballast hesitation anchorage; the queue outside the door']
+    ],
+    'Strikes':[
+      ['—','Not struck. 2019 tanker sabotage off the anchorage is the precedent for grey-zone action here.']
+    ],
+    'GodsEye read':'Fujairah roads are the waiting room of the crisis. Anchorage counts here are inverse telemetry on strait confidence — when the roads empty eastward, someone believes transit is safe again.'
+  }
+},
+{
+  id:'lavan', lat:26.81, lon:53.36, cat:'terminal', name:'Lavan Island',
+  sub:'SECONDARY EXPORT TERMINAL',
+  colour:'#ff9f43',
+  tabs:{
+    'Overview':[
+      ['Function','Crude/condensate export terminal + 55k b/d refinery'],
+      ['Role','Secondary outlet after Kharg; offshore field service hub']
+    ],
+    'Strikes':[
+      ['—','No confirmed strikes. Monitor as an overflow indicator if Kharg capacity is genuinely impaired.']
+    ],
+    'GodsEye read':'If May damaged Kharg loading, Lavan and Sirri calls rise. Flat traffic here after a claimed Kharg outage argues the outage is throughput-throttle, not hardware kill.'
+  }
+},
+{
+  id:'sirri', lat:25.90, lon:54.53, cat:'terminal', name:'Sirri Island',
+  sub:'EXPORT TERMINAL + STS ZONE',
+  colour:'#ff9f43',
+  tabs:{
+    'Overview':[
+      ['Function','Crude export terminal; historic ship-to-ship transfer waters for the shadow fleet'],
+      ['Role','Deep-Gulf loading point closer to the strait than Kharg']
+    ],
+    'Strikes':[
+      ['—','No confirmed strikes.'],['NOTE','STS activity in adjacent waters is GFW loitering-event territory — census, not surveillance.']
+    ],
+    'GodsEye read':'Sirri STS events are the shadow fleet\u2019s pulse. Loitering-pair counts here map the eastern corridor\u2019s actual liquidity better than any manifest.'
+  }
+},
+{
+  id:'abadan', lat:30.34, lon:48.28, cat:'processing', name:'Abadan Refinery',
+  sub:'OLDEST ME REFINERY · STRUCK',
+  colour:'#ff6b6b',
+  tabs:{
+    'Overview':[
+      ['Function','~400k b/d refinery — domestic fuel backbone for Khuzestan'],
+      ['Built','1912 (Anglo-Persian) — oldest refinery in the Middle East'],
+      ['History','Destroyed in the 1980–88 war; rebuilt']
+    ],
+    'Strikes':[
+      ['2026','Military section targeted. Civilian fuel supply to Khuzestan disrupted — ~4m population affected.']
+    ],
+    'GodsEye read':'Abadan hits translate directly to domestic fuel queues, not export revenue. Strikes here read as population-pressure, and under the Karbala Paradigm that pressure does not convert to capitulation — it converts to legitimacy for the state\u2019s war footing.'
+  }
+}
+];
+
+var infraGroup = L.layerGroup();
+var catIcon = { field:'◉', processing:'▣', terminal:'⬢', port:'⚓' };
+INFRA.forEach(function(f){
+  var mk = L.marker([f.lat, f.lon], {
+    icon: L.divIcon({
+      className:'', iconSize:[22,22], iconAnchor:[11,11],
+      html: '<div class="ge-mk" style="width:16px;height:16px;background:' + f.colour +
+            ';display:flex;align-items:center;justify-content:center;font-size:8px;color:#000;font-weight:900">' +
+            (catIcon[f.cat]||'●') + '</div>'
+    }),
+    zIndexOffset: 500
+  });
+  mk.bindTooltip(f.name.split('—')[0].trim(), { permanent:true, direction:'right', offset:[10,0], className:'ge-lbl' });
+  mk.on('click', function(){ openDossier(f); });
+  mk.addTo(infraGroup);
+});
+infraGroup.addTo(map);   // dossiers on by default
+
+/* ---------------- LIVE VESSELS (TankerMap via vessels.js) ---------------- */
+var vesselGroup = L.layerGroup();
+var vesselTimer = null;
+var ofac = null;   // IMO -> {n, p, f} from /.netlify/functions/sanctions
+function loadOfac(){
+  return fetch('/.netlify/functions/sanctions')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d.success){ ofac = d.imos; ofacSources = d.sources; } })
+    .catch(function(){ ofac = null; });
+}
+var ofacSources = null;
+function vesselIcon(v){
+  var anchored = (v.sog || 0) <= 1;
+  var hit = ofac && v.imo && ofac[String(v.imo)];
+  var flagged = v.sanctioned || hit;
+  var col = flagged ? '#ff3b3b' : v.cargo === 'loaded' ? '#d4a017' : '#8a9db5';
+  var glyph = anchored ? '◯' : '➤';
+  var rot = anchored ? 0 : ((v.cog || 0) - 90);
+  return L.divIcon({
+    className: '', iconSize: [18,18], iconAnchor: [9,9],
+    html: '<div class="v-chev' + (flagged ? ' v-sanc' : '') +
+          '" style="transform:rotate(' + rot + 'deg);color:' + col + '">' + glyph + '</div>'
+  });
+}
+function sancLabel(v){
+  var hit = ofac && v.imo && ofac[String(v.imo)];
+  if (hit){
+    var srcs = hit.lists.map(function(l){ return l.src; }).join('+');
+    var progs = hit.lists.map(function(l){ return l.prog; }).filter(Boolean).join(', ');
+    var lbl = ' <span style="color:#ff6b6b;font-weight:800">SANCTIONED — ' + srcs +
+              (progs ? ' · ' + progs : '') + '</span>';
+    if (!v.sanctioned) lbl += ' <i style="color:#ffd93d">(official lists — tracker unflagged)</i>';
+    return lbl;
+  }
+  if (v.sanctioned)
+    return ' <span style="color:#ff9f43;font-weight:800">TRACKER-FLAGGED — not on OFAC/EU/UK/UN vessel lists</span>';
+  return '';
+}
+function loadVessels(){
+  fetch('/.netlify/functions/vessels')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.success){ setStatus('Vessels: ' + (d.error || 'feed unavailable')); return; }
+      vesselGroup.clearLayers();
+      var ofacHits = 0, trackerOnly = 0, ofacMissed = 0;
+      (d.vessels || []).forEach(function(v){
+        if (v.lat == null || v.lon == null) return;
+        var hit = ofac && v.imo && ofac[String(v.imo)];
+        if (hit && v.sanctioned) ofacHits++;
+        else if (hit) { ofacHits++; ofacMissed++; }
+        else if (v.sanctioned) trackerOnly++;
+        var age = v.draught_age_h != null ? ' (' + v.draught_age_h + 'h old)' : '';
+        L.marker([v.lat, v.lon], { icon: vesselIcon(v), zIndexOffset: 400 })
+          .bindPopup(
+            '<b style="color:' + ((v.sanctioned || hit) ? '#ff6b6b' : '#d4a017') + '">' + (v.name || 'UNNAMED') + '</b>' +
+            sancLabel(v) + '<br>' +
+            'IMO ' + (v.imo || '—') + ' · ' + (v.flag || '?') + ' · ' + (v.type || '?') +
+            ' · ' + (v.dwt ? Math.round(v.dwt/1000) + 'k DWT' : '—') + '<br>' +
+            'Draught: ' + (v.draught != null ? v.draught + ' m' + age : 'n/a') +
+            ' · ' + (v.cargo === 'loaded' ? 'LADEN' : v.cargo === 'ballast' ? 'BALLAST' : (v.cargo || '?')) + '<br>' +
+            'SOG ' + (v.sog != null ? v.sog + ' kn' : '—') + ' · COG ' + (v.cog != null ? Math.round(v.cog) + '°' : '—') +
+            ' · ' + (v.nav || '') + '<br>' +
+            'Broadcast dest: ' + (v.dest || '—') + ' <i style="color:#8a8f98">(claim — trajectory is the fact)</i><br>' +
+            'Last seen: ' + (v.seen || '—')
+          ).addTo(vesselGroup);
+      });
+      setStatus('Vessels: ' + d.count + ' hulls · ' + d.laden + ' laden / ' + d.ballast + ' ballast · ' +
+                (ofac ? ofacHits + ' OFAC-listed' + (ofacMissed ? ' (' + ofacMissed + ' tracker-unflagged)' : '') +
+                        (trackerOnly ? ' · ' + trackerOnly + ' tracker-only flags' : '')
+                      : d.sanctioned + ' sanctioned (tracker field — OFAC feed unavailable)') +
+                ' · ' + d.anchored + ' anchored · ' + d.vlcc_stationary + ' VLCC stationary · AIS-only');
+    })
+    .catch(function(e){ setStatus('Vessels: ' + e.message); });
+}
+function vesselsStart(){
+  loadOfac().then(function(){ loadVessels(); });
+  vesselTimer = setInterval(loadVessels, 300000);
+}
+function vesselsStop(){ clearInterval(vesselTimer); vesselTimer = null; }
+
+/* ---------------- STRIKE RECORD layer ---------------- */
+var STRIKES = [
+  { lat:29.24, lon:50.31, d:'13 MAR', t:'Kharg Island — US raid, military targets, oil infra spared' },
+  { lat:27.47, lon:52.61, d:'18 MAR', t:'Asaluyeh — refineries 4 & 7 + trains, ~14% output (~100 mcm/d)' },
+  { lat:27.47, lon:52.55, d:'6 APR',  t:'Asaluyeh petrochemical plant — ~50% of national petchem output' },
+  { lat:29.20, lon:50.33, d:'6 MAY',  t:'Kharg southern loading cluster — non-routine thermal event, read open' },
+  { lat:27.14, lon:56.21, d:'2026',   t:'Bandar Abbas — port + naval base struck' },
+  { lat:30.34, lon:48.28, d:'2026',   t:'Abadan — military section of refinery complex' },
+  { lat:32.60, lon:51.70, d:'2026',   t:'Isfahan industrial zone — dual-use designation disputed' },
+  { lat:26.00, lon:54.00, d:'JUL',    t:'Phase 8 — three US strike waves, ~300+ targets theatre-wide' }
+];
+var strikeGroup = L.layerGroup();
+STRIKES.forEach(function(s){
+  L.circleMarker([s.lat, s.lon], { radius:7, color:'#ff3b3b', weight:2, fill:false })
+    .bindPopup('<b style="color:#ff6b6b">✸ ' + s.d + ' 2026</b><br>' + s.t)
+    .addTo(strikeGroup);
+});
+
+/* ---------------- TSS + minefield note ---------------- */
+var tssGroup = L.layerGroup();
+L.polyline([[26.30,56.90],[26.45,56.55],[26.55,56.30],[26.62,56.05],[26.70,55.70]],
+  { color:'#49d39c', weight:2, dashArray:'6 6' }).bindPopup('Inbound TSS lane').addTo(tssGroup);
+L.polyline([[26.55,55.70],[26.48,56.05],[26.40,56.30],[26.30,56.55],[26.15,56.90]],
+  { color:'#ffd93d', weight:2, dashArray:'6 6' }).bindPopup('Outbound TSS lane').addTo(tssGroup);
+L.circle([26.55, 56.25], { radius: 22000, color:'#ff6b6b', weight:1.5, fill:false, dashArray:'3 5' })
+  .bindPopup('<b style="color:#ff6b6b">MINED TSS ZONE</b><br>Fewer than 10 mines reported (CRS, 9 Mar) — a small physical count that still closes a 2-mile channel. PGSA safe-routing fee applies.<br><i>Administrative closure in force since Jul 2026.</i>')
+  .addTo(tssGroup);
+L.polygon([[26.9,55.9],[26.9,56.9],[26.1,57.0],[25.9,56.2]],
+  { color:'#ff3b3b', weight:2, fill:true, fillOpacity:.06, dashArray:'8 4' })
+  .bindPopup('<b style="color:#ff6b6b">PGSA CLOSURE ZONE</b><br>Administrative closure · ~89% interdicted<br>Geometry per PGSA\u2019s own published zone definition (western boundary Qeshm tip \u2192 Umm Al-Quwain; eastern boundary Kuh-e Mubarak \u2192 south of Fujairah).')
+  .addTo(tssGroup);
+
+/* ---------------- LAYER STATE + DRAWER ---------------- */
+var LSTATE = { vessels:false, firms:false, opensky:false, viirsTrue:false, viirsFires:false,
+               infra:true, strikes:false, tss:false, labels:true };
+
+var drawer = document.getElementById('drawer');
+document.getElementById('btn-layers').onclick = function(){ drawer.classList.toggle('open'); };
+document.getElementById('drawer-close').onclick = function(){ drawer.classList.remove('open'); };
+map.on('click', function(){ drawer.classList.remove('open'); });
+
+function mkRow(parent, id, name, colour, isRadio, sub){
+  var d = document.createElement('div');
+  d.className = 'lyr' + (isRadio ? ' radio' : '');
+  d.id = 'lyr-' + id;
+  d.innerHTML = '<div class="chk"></div><div class="dot" style="background:' + colour + '"></div>' +
+                '<span>' + name + '</span>' + (sub ? '<span class="sub">' + sub + '</span>' : '');
+  parent.appendChild(d);
+  return d;
+}
+function setRow(id, on){
+  var el = document.getElementById('lyr-' + id);
+  if (!el) return;
+  el.classList.toggle('on', on);
+  el.querySelector('.chk').textContent = on ? '✓' : '';
+}
+
+/* basemaps (radio) */
+var bmBox = document.getElementById('basemaps');
+var BMDEF = [
+  ['esri','Satellite (Esri World Imagery)','#5aa7ff'],
+  ['s2cloudless','Sentinel-2 Cloudless mosaic','#49d39c'],
+  ['dark','Dark (CARTO)','#8a8f98'],
+  ['osm','Street (OSM)','#ffd93d']
+];
+BMDEF.forEach(function(b){
+  mkRow(bmBox, 'bm-' + b[0], b[1], b[2], true).onclick = function(){
+    if (currentBase === b[0]) return;
+    map.removeLayer(BASE[currentBase]);
+    currentBase = b[0];
+    BASE[currentBase].addTo(map);
+    BASE[currentBase].bringToBack();
+    BMDEF.forEach(function(x){ setRow('bm-' + x[0], x[0] === currentBase); });
+  };
+});
+setRow('bm-esri', true);
+mkRow(bmBox, 'labels', 'Place names + borders', '#e8e6e0').onclick = function(){
+  LSTATE.labels = !LSTATE.labels;
+  LSTATE.labels ? labelsOverlay.addTo(map) : map.removeLayer(labelsOverlay);
+  setRow('labels', LSTATE.labels);
+};
+setRow('labels', true);
+
+/* live layers */
+var liveBox = document.getElementById('live-layers');
+mkRow(liveBox, 'vessels', 'Live vessels (TankerMap)', '#d4a017', false, '5 min').onclick = function(){
+  LSTATE.vessels = !LSTATE.vessels;
+  if (LSTATE.vessels){ vesselGroup.addTo(map); vesselsStart(); }
+  else { map.removeLayer(vesselGroup); vesselsStop(); }
+  setRow('vessels', LSTATE.vessels);
+};
+mkRow(liveBox, 'firms', 'FIRMS thermal (live points)', '#ff6b6b', false, 'own feed').onclick = function(){
+  LSTATE.firms = !LSTATE.firms;
+  if (LSTATE.firms){ firmsGroup.addTo(map); loadFirms(); }
+  else map.removeLayer(firmsGroup);
+  setRow('firms', LSTATE.firms);
+};
+mkRow(liveBox, 'opensky', 'OpenSky air picture', '#5aa7ff', false, 'anon, 60s').onclick = function(){
+  LSTATE.opensky = !LSTATE.opensky;
+  if (LSTATE.opensky){ oskyGroup.addTo(map); oskyStart(); }
+  else { map.removeLayer(oskyGroup); oskyStop(); }
+  setRow('opensky', LSTATE.opensky);
+};
+
+/* GIBS layers */
+var gibsBox = document.getElementById('gibs-layers');
+var dateInput = document.getElementById('gibs-date');
+dateInput.value = gibsDate;
+dateInput.max = gibsDate;
+dateInput.onchange = function(){
+  gibsDate = dateInput.value;
+  refreshGibsDates();
+  setStatus('GIBS date → ' + gibsDate);
+};
+Object.keys(GIBS_DEFS).forEach(function(k){
+  var def = GIBS_DEFS[k];
+  gibsLayers[k] = buildGibs(def);
+  mkRow(gibsBox, k, def.name, k === 'viirsFires' ? '#ff9f43' : '#49d39c', false, '~750 m').onclick = function(){
+    LSTATE[k] = !LSTATE[k];
+    if (LSTATE[k]){ gibsLayers[k] = buildGibs(def); gibsLayers[k].addTo(map); }
+    else map.removeLayer(gibsLayers[k]);
+    setRow(k, LSTATE[k]);
+  };
+});
+
+/* theatre layers */
+var thBox = document.getElementById('theatre-layers');
+mkRow(thBox, 'infra', 'Infrastructure dossiers', '#d4a017').onclick = function(){
+  LSTATE.infra = !LSTATE.infra;
+  LSTATE.infra ? infraGroup.addTo(map) : map.removeLayer(infraGroup);
+  setRow('infra', LSTATE.infra);
+};
+setRow('infra', true);
+mkRow(thBox, 'strikes', 'Strike record 2026', '#ff3b3b').onclick = function(){
+  LSTATE.strikes = !LSTATE.strikes;
+  LSTATE.strikes ? strikeGroup.addTo(map) : map.removeLayer(strikeGroup);
+  setRow('strikes', LSTATE.strikes);
+};
+mkRow(thBox, 'tss', 'Hormuz TSS + mined zone', '#49d39c').onclick = function(){
+  LSTATE.tss = !LSTATE.tss;
+  LSTATE.tss ? tssGroup.addTo(map) : map.removeLayer(tssGroup);
+  setRow('tss', LSTATE.tss);
+};
+
+/* ---------------- SENTINEL-2 SCENE OVERLAY ---------------- */
+var s2Overlay = null;
+function loadSentinel(mode){
+  var b = map.getBounds();
+  var bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
+    .map(function(x){ return x.toFixed(4); }).join(',');
+  var url = '/.netlify/functions/sentinel?bbox=' + bbox + '&date=' + gibsDate + '&mode=' + mode;
+  setStatus('Sentinel-2 ' + mode.toUpperCase() + ': rendering ' + gibsDate + '…', true);
+  fetch(url).then(function(r){
+    var ct = r.headers.get('Content-Type') || '';
+    if (ct.indexOf('image/png') === -1){
+      return r.json().then(function(d){ throw new Error(d.error || 'render failed'); });
+    }
+    return r.blob();
+  }).then(function(blob){
+    if (s2Overlay) map.removeLayer(s2Overlay);
+    s2Overlay = L.imageOverlay(URL.createObjectURL(blob), b, { opacity: 1, zIndex: 250 }).addTo(map);
+    setStatus('Sentinel-2 ' + mode.toUpperCase() + ' · ' + gibsDate + ' · Copernicus data via Sentinel Hub');
+  }).catch(function(e){
+    setStatus('Sentinel-2: ' + e.message + (/(no data|render)/i.test(e.message) ? ' — no pass that day, step the date' : ''));
+  });
+}
+document.getElementById('s2-tc').onclick = function(){ loadSentinel('truecolor'); drawer.classList.remove('open'); };
+document.getElementById('s2-swir').onclick = function(){ loadSentinel('swir'); drawer.classList.remove('open'); };
+document.getElementById('s2-clear').onclick = function(){
+  if (s2Overlay){ map.removeLayer(s2Overlay); s2Overlay = null; setStatus('Sentinel scene cleared'); }
+};
+
+/* ---------------- DOSSIER SHEET ---------------- */
+var sheet = document.getElementById('sheet');
+var sheetTabs = document.getElementById('sheet-tabs');
+var sheetBody = document.getElementById('sheet-body');
+document.getElementById('sheet-close').onclick = closeDossier;
+document.getElementById('sheet-grab').onclick = closeDossier;
+function closeDossier(){ sheet.classList.remove('open'); }
+
+function openDossier(f){
+  document.getElementById('sheet-title').textContent = f.name;
+  document.getElementById('sheet-sub').textContent = f.sub;
+  sheetTabs.innerHTML = '';
+  var keys = Object.keys(f.tabs);
+  keys.forEach(function(k, i){
+    var t = document.createElement('div');
+    t.className = 'stab' + (i === 0 ? ' on' : '');
+    t.textContent = k;
+    t.onclick = function(){
+      sheetTabs.querySelectorAll('.stab').forEach(function(x){ x.classList.remove('on'); });
+      t.classList.add('on');
+      renderTab(f, k);
+    };
+    sheetTabs.appendChild(t);
+  });
+  renderTab(f, keys[0]);
+  sheet.classList.add('open');
+  map.flyTo([f.lat - 0.35, f.lon], Math.max(map.getZoom(), 9), { duration: .8 });
+}
+function renderTab(f, key){
+  var v = f.tabs[key];
+  var html = '';
+  if (typeof v === 'string'){
+    html = '<div class="note">' + v + '</div>';
+  } else if (key === 'Strikes'){
+    v.forEach(function(row){
+      html += '<div class="strike"><div class="sd">' + row[0] + '</div><div>' + row[1] + '</div></div>';
+    });
+  } else {
+    v.forEach(function(row){
+      html += '<div class="kv"><b>' + row[0] + '</b><span>' + row[1] + '</span></div>';
+    });
+  }
+  sheetBody.innerHTML = html;
+  sheetBody.scrollTop = 0;
+}
+
+/* ---------------- FULLSCREEN ---------------- */
+var fsBtn = document.getElementById('btn-fs');
+var cssFS = false;
+function inNativeFS(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+fsBtn.onclick = function(){
+  var el = document.getElementById('wrap');
+  if (el.requestFullscreen || el.webkitRequestFullscreen){
+    if (!inNativeFS()){
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  } else {
+    /* iOS Safari fallback — CSS takeover */
+    cssFS = !cssFS;
+    document.getElementById('wrap').style.position = 'fixed';
+    fsBtn.classList.toggle('on', cssFS);
+    setTimeout(function(){ map.invalidateSize(); }, 250);
+  }
+};
+document.addEventListener('fullscreenchange', function(){
+  fsBtn.classList.toggle('on', inNativeFS());
+  setTimeout(function(){ map.invalidateSize(); }, 250);
+});
+
+/* ---------------- HOME ---------------- */
+document.getElementById('btn-home').onclick = function(){
+  map.flyTo([26.6, 53.5], 7, { duration: .8 });
+};
+
+/* orientation / resize safety */
+window.addEventListener('resize', function(){ setTimeout(function(){ map.invalidateSize(); }, 200); });
+</script>
+</body>
+</html>
