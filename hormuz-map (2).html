@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=6,user-scalable=yes"/>
+<title>GodsEye — Hormuz Intelligence Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --abyss:#05070d; --panel:rgba(11,16,24,.86); --hair:rgba(201,168,76,.28);
+  --gold:#c9a84c; --ink:#e8eaef; --dim:#9aa4b4; --faint:#5c6675;
+  --red:#e0483c; --amber:#f5a623; --blue:#4896ff; --green:#49d39c; --violet:#b278ff;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--abyss);color:var(--ink);
+  font-family:'IBM Plex Mono',monospace;overflow:hidden}
+#map{position:absolute;inset:0;background:var(--abyss)}
+.leaflet-container{background:var(--abyss)}
+.leaflet-control-attribution{background:rgba(5,9,16,.7)!important;color:var(--faint)!important;font-size:8px!important}
+.leaflet-control-attribution a{color:var(--dim)!important}
+.leaflet-bar a{background:var(--panel)!important;color:var(--dim)!important;border-color:var(--hair)!important}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border:1px solid var(--hair);border-radius:3px;backdrop-filter:blur(12px)}
+.leaflet-popup-tip{background:var(--panel);border:1px solid var(--hair)}
+.leaflet-popup-content{margin:11px 13px;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.5}
+
+#top{position:absolute;top:0;left:0;right:0;z-index:1000;height:44px;display:flex;align-items:center;
+  gap:14px;padding:0 12px;background:linear-gradient(#05070de6,#05070d99,transparent);pointer-events:none}
+#top .brand{font-family:'Barlow Condensed';font-weight:700;letter-spacing:.14em;color:var(--gold);font-size:20px}
+#top .sub{color:var(--dim);font-size:11px;letter-spacing:.08em}
+#top .spacer{flex:1}
+#top button{pointer-events:auto}
+button{background:var(--panel);color:var(--dim);border:1px solid var(--hair);border-radius:3px;
+  padding:6px 11px;font-family:inherit;font-size:11px;letter-spacing:.1em;cursor:pointer}
+button:hover{color:var(--ink);border-color:var(--gold)}
+button.on{color:var(--abyss);background:var(--gold);border-color:var(--gold)}
+
+#rail{position:absolute;top:52px;left:10px;z-index:1000;width:212px;
+  background:var(--panel);border:1px solid var(--hair);border-radius:5px;backdrop-filter:blur(12px);
+  transition:transform .22s ease}
+#rail.closed{transform:translateX(-232px)}
+#rail h4{margin:0;padding:9px 12px;font-family:'Barlow Condensed';letter-spacing:.16em;font-size:13px;
+  color:var(--gold);border-bottom:1px solid var(--hair);display:flex;justify-content:space-between}
+.rowgrp{padding:2px 10px 10px}
+.rowgrp .lbl{font-size:9px;letter-spacing:.16em;color:var(--faint);margin:9px 0 3px}
+.layer{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:3px;cursor:pointer;font-size:11px;color:var(--dim)}
+.layer:hover{background:rgba(255,255,255,.04);color:var(--ink)}
+.layer .dot{width:9px;height:9px;border-radius:50%;flex:none;border:1px solid rgba(255,255,255,.4)}
+.layer .chk{margin-left:auto;font-size:10px;color:var(--faint)}
+.layer.active .chk{color:var(--green)}
+.layer.active{color:var(--ink)}
+#railtab{position:absolute;top:52px;left:10px;z-index:999;background:var(--panel);border:1px solid var(--hair);
+  border-radius:5px;color:var(--gold);padding:8px 11px;cursor:pointer;font-size:14px;display:none}
+#rail.closed ~ #railtab{display:block}
+
+#dossier{position:absolute;top:0;right:0;bottom:0;z-index:1100;width:min(420px,88vw);
+  background:var(--panel);border-left:1px solid var(--hair);backdrop-filter:blur(16px);
+  transform:translateX(100%);transition:transform .26s ease;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#dossier.open{transform:translateX(0)}
+#dossier .dhead{position:sticky;top:0;background:linear-gradient(#0b1018f2,#0b1018cc);
+  padding:16px 18px 12px;border-bottom:1px solid var(--hair)}
+#dossier .cat{font-size:10px;letter-spacing:.2em;color:var(--gold)}
+#dossier h2{margin:4px 0 2px;font-family:'Barlow Condensed';font-weight:700;font-size:26px;line-height:1.05;color:var(--ink)}
+#dossier .coord{font-size:10px;color:var(--faint)}
+#dossier .close{position:absolute;top:14px;right:14px;font-size:18px;color:var(--dim);cursor:pointer;background:none;border:none;padding:4px 8px}
+#dossier .body{padding:8px 18px 60px}
+.field{padding:10px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+.field .k{font-size:9px;letter-spacing:.18em;color:var(--faint);margin-bottom:3px}
+.field .v{font-size:12.5px;line-height:1.5;color:var(--ink)}
+.field.strike .k{color:var(--red)} .field.strike .v{color:#ffd9d4}
+.field.god .k{color:var(--gold)} .field.god .v{color:#f0e2bd}
+.badge{display:inline-block;font-size:9px;letter-spacing:.12em;padding:2px 7px;border-radius:2px;margin-right:5px;margin-top:4px}
+
+#legend{position:absolute;bottom:8px;left:10px;z-index:1000;background:var(--panel);border:1px solid var(--hair);
+  border-radius:4px;padding:7px 10px;font-size:9px;color:var(--dim);display:flex;gap:11px;flex-wrap:wrap;max-width:68vw}
+#legend span{display:flex;align-items:center;gap:4px}
+.fmark span{font-family:'Barlow Condensed';font-weight:700}
+#status{position:absolute;bottom:8px;right:10px;z-index:1000;font-size:9px;color:var(--faint);
+  background:var(--panel);border:1px solid var(--hair);border-radius:4px;padding:6px 9px;max-width:40vw;text-align:right}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="top">
+  <span class="brand">GODSEYE</span>
+  <span class="sub">HORMUZ INTELLIGENCE MAP</span>
+  <span class="spacer"></span>
+  <button id="fs">⛶ FULLSCREEN</button>
+  <button id="baseBtn">◱ SATELLITE</button>
+</div>
+
+<div id="rail">
+  <h4>LAYERS <span id="railclose" style="cursor:pointer;color:var(--dim)">‹</span></h4>
+  <div class="rowgrp">
+    <div class="lbl">FACILITIES</div>
+    <div class="layer active" data-layer="facilities"><span class="dot" style="background:var(--gold)"></span>Sites &amp; dossiers<span class="chk">●</span></div>
+    <div class="lbl">OSINT 1 · SEA</div>
+    <div class="layer" data-layer="vessels"><span class="dot" style="background:var(--green)"></span>AIS vessels (live)<span class="chk">○</span></div>
+    <div class="layer" data-layer="fleet"><span class="dot" style="background:var(--blue)"></span>USNI fleet tracker<span class="chk">○</span></div>
+    <div class="layer" data-layer="pgsa"><span class="dot" style="background:var(--red)"></span>PGSA closure zone<span class="chk">○</span></div>
+    <div class="lbl">OSINT 1 · THERMAL / AIR</div>
+    <div class="layer" data-layer="firms"><span class="dot" style="background:var(--amber)"></span>FIRMS thermal (VIIRS)<span class="chk">○</span></div>
+    <div class="layer" data-layer="gibs"><span class="dot" style="background:#ff6b3d"></span>GIBS fire tiles<span class="chk">○</span></div>
+    <div class="layer" data-layer="opensky"><span class="dot" style="background:var(--violet)"></span>OpenSky aircraft<span class="chk">○</span></div>
+    <div class="lbl">IMAGERY</div>
+    <div class="layer" data-layer="sentinel"><span class="dot" style="background:#7bd3ff"></span>VIIRS true-colour<span class="chk">○</span></div>
+    <div class="lbl">SENTINEL-2 SCENE · 10–20m</div>
+    <div style="display:flex;gap:4px;padding:2px 6px 4px">
+      <button id="s2tc" style="flex:1;padding:5px 4px;font-size:9px">TRUE</button>
+      <button id="s2swir" style="flex:1;padding:5px 4px;font-size:9px">SWIR</button>
+      <button id="s2clear" style="width:30px;padding:5px 0;font-size:9px">✕</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;padding:0 6px 6px">
+      <span style="font-size:9px;color:var(--faint);letter-spacing:.1em">DATE</span>
+      <input type="date" id="scenedate" style="flex:1;background:#0b1220;border:1px solid var(--hair);border-radius:3px;color:var(--ink);font-family:inherit;font-size:10px;padding:3px 5px;color-scheme:dark">
+    </div>
+  </div>
+</div>
+<div id="railtab" title="layers">☰</div>
+
+<div id="dossier">
+  <div class="dhead">
+    <button class="close" id="dclose">✕</button>
+    <div class="cat" id="d-cat"></div>
+    <h2 id="d-name"></h2>
+    <div class="coord" id="d-coord"></div>
+  </div>
+  <div class="body" id="d-body"></div>
+</div>
+
+<div id="legend">
+  <span class="fmark"><span style="color:var(--amber)">▲</span>field/gas</span>
+  <span class="fmark"><span style="color:var(--gold)">⬢</span>terminal</span>
+  <span class="fmark"><span style="color:var(--red)">◆</span>naval</span>
+  <span class="fmark"><span style="color:var(--violet)">☢</span>nuclear</span>
+  <span class="fmark"><span style="color:var(--blue)">✈</span>airbase</span>
+  <span class="fmark"><span style="color:var(--green)">⬮</span>incident</span>
+  <span><i style="width:7px;height:7px;border-radius:50%;background:#e0483c;display:inline-block"></i>struck</span>
+</div>
+<div id="status">initialising…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const map = L.map('map',{zoomControl:true,attributionControl:true,minZoom:3,maxZoom:16}).setView([25.5,54.5],6);
+const st = document.getElementById('status');
+const setStatus = t => st.textContent = t;
+
+const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Esri World Imagery'});
+const satLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,opacity:.85});
+const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OpenStreetMap © CARTO'});
+let satOn=true; sat.addTo(map); satLabels.addTo(map);
+document.getElementById('baseBtn').onclick=function(){
+  satOn=!satOn;
+  if(satOn){dark.remove();sat.addTo(map);satLabels.addTo(map);this.textContent='◱ SATELLITE';this.classList.remove('on');}
+  else{sat.remove();satLabels.remove();dark.addTo(map);this.textContent='◱ DARK';this.classList.add('on');}
+};
+document.getElementById('fs').onclick=function(){
+  if(!document.fullscreenElement){(document.documentElement.requestFullscreen||function(){})();this.classList.add('on');}
+  else{(document.exitFullscreen||function(){})();this.classList.remove('on');}
+  setTimeout(()=>map.invalidateSize(),300);
+};
+const rail=document.getElementById('rail');
+document.getElementById('railclose').onclick=()=>rail.classList.add('closed');
+document.getElementById('railtab').onclick=()=>rail.classList.remove('closed');
+
+const L_={};
+document.querySelectorAll('.layer').forEach(el=>el.addEventListener('click',()=>{
+  const name=el.dataset.layer;
+  const active=el.classList.toggle('active');
+  el.querySelector('.chk').textContent=active?'●':'○';
+  active?showLayer(name):(L_[name]&&map.removeLayer(L_[name]));
+}));
+
+const catStyle={field:{c:'#f5a623',s:'▲'},processing:{c:'#f5a623',s:'▲'},terminal:{c:'#c9a84c',s:'⬢'},
+  naval:{c:'#e0483c',s:'◆'},nuclear:{c:'#b278ff',s:'☢'},airbase:{c:'#4896ff',s:'✈'},
+  bunkering:{c:'#c9a84c',s:'⬢'},incident:{c:'#49d39c',s:'⬮'}};
+let facLayer=L.layerGroup(), FAC=[];
+fetch('facilities.json').then(r=>r.json()).then(d=>{
+  FAC=d.facilities;
+  FAC.forEach(f=>{
+    const s=catStyle[f.cat]||{c:'#c9a84c',s:'⬢'};
+    const struck=/STRUCK|SEIZED/.test(f.strikes||'');
+    const icon=L.divIcon({className:'fmark',html:
+      `<span style="color:${s.c};font-size:20px;filter:drop-shadow(0 1px 3px #000)">${s.s}</span>`+
+      `<div style="font:600 9px 'Barlow Condensed';color:#fff;letter-spacing:.04em;text-shadow:0 1px 3px #000;margin-top:-3px;white-space:nowrap">${f.name.split('—')[0].trim()}</div>`+
+      (struck?`<div style="position:absolute;top:-3px;left:15px;width:7px;height:7px;border-radius:50%;background:#e0483c;box-shadow:0 0 6px #e0483c"></div>`:''),
+      iconSize:[10,10],iconAnchor:[5,5]});
+    facLayer.addLayer(L.marker([f.lat,f.lon],{icon}).on('click',()=>openDossier(f)));
+  });
+  facLayer.addTo(map); L_['facilities']=facLayer;
+  setStatus(FAC.length+' facilities · tap a site');
+}).catch(()=>setStatus('facilities.json not found'));
+
+const fieldRow=(k,v,cls)=>v?`<div class="field ${cls||''}"><div class="k">${k}</div><div class="v">${v}</div></div>`:'';
+function openDossier(f){
+  document.getElementById('d-cat').textContent=f.cat.toUpperCase()+' · '+(f.flag||'');
+  document.getElementById('d-name').textContent=f.name;
+  document.getElementById('d-coord').textContent=f.lat.toFixed(3)+'°N  '+f.lon.toFixed(3)+'°E';
+  document.getElementById('d-body').innerHTML=
+    fieldRow('OPERATOR',f.operator)+fieldRow('WHERE IT GOES',f.runs_to)+fieldRow('BUILT',f.built)+
+    fieldRow('COST',f.cost)+fieldRow('CAPACITY',f.capacity)+fieldRow('RESERVES',f.reserves)+
+    fieldRow('REVENUE',f.revenue)+fieldRow('ISSUES',f.issues)+
+    fieldRow('STRIKES ABSORBED',f.strikes,'strike')+fieldRow('GODSEYE READ',f.godseye,'god')+
+    (f.layers?`<div class="field"><div class="k">RELATED LAYERS</div><div class="v">${f.layers.map(l=>`<span class="badge" style="border:1px solid var(--hair);color:var(--dim)">${l}</span>`).join('')}</div></div>`:'');
+  document.getElementById('dossier').classList.add('open');
+  map.flyTo([f.lat,f.lon],Math.max(map.getZoom(),8),{duration:.6});
+}
+document.getElementById('dclose').onclick=()=>document.getElementById('dossier').classList.remove('open');
+
+async function showLayer(name){
+  if(L_[name]){map.addLayer(L_[name]);return;}
+  setStatus('loading '+name+'…');
+  try{
+    if(name==='vessels')L_[name]=await loadVessels();
+    else if(name==='fleet')L_[name]=await loadFleet();
+    else if(name==='firms')L_[name]=await loadFirms();
+    else if(name==='opensky')L_[name]=await loadOpenSky();
+    else if(name==='pgsa')L_[name]=loadPGSA();
+    else if(name==='gibs')L_[name]=loadGIBS();
+    else if(name==='sentinel')L_[name]=loadSentinel();
+    if(L_[name])map.addLayer(L_[name]);
+  }catch(e){setStatus(name+' unavailable');}
+}
+let OFAC=null; // IMO -> {lists,names,programs}
+async function loadSanctions(){
+  if(OFAC)return OFAC;
+  try{const d=await(await fetch('/.netlify/functions/sanctions',{signal:AbortSignal.timeout(20000)})).json();
+    if(d.success)OFAC=d.imos;}catch(e){OFAC=null;}
+  return OFAC;
+}
+function sancTag(v){
+  const hit=OFAC&&v.imo&&OFAC[String(v.imo)];
+  if(hit){const srcs=(hit.lists||[]).join('+');
+    const progs=(hit.programs||[]).filter(p=>p&&p!=='UK'&&p!=='EU'&&p!=='UN').join(', ');
+    let s=`<b style="color:#e0483c">⚠ SANCTIONED — ${srcs}${progs?' · '+progs:''}</b>`;
+    if(!v.sanctioned)s+=`<br><i style="color:#f5a623">official lists — tracker unflagged</i>`;
+    return s+'<br>';}
+  if(v.sanctioned)return `<b style="color:#f5a623">⚠ TRACKER-FLAGGED — not on OFAC/EU/UK/UN</b><br>`;
+  return '';
+}
+async function loadVessels(){
+  await loadSanctions();
+  const d=await(await fetch('/.netlify/functions/vessels',{signal:AbortSignal.timeout(15000)})).json();
+  const g=L.layerGroup();
+  let ofacN=0,trkOnly=0;
+  (d.vessels||[]).forEach(v=>{
+    if(!v.lat||!v.lon)return;
+    const hit=OFAC&&v.imo&&OFAC[String(v.imo)];
+    if(hit)ofacN++; else if(v.sanctioned)trkOnly++;
+    const laden=v.cargo==='loaded'||v.laden;
+    const anchored=(v.sog||0)<=1;
+    const col=(v.sanctioned||hit)?'#e0483c':(laden?'#f5a623':'#8a9db5');
+    const age=v.draught_age_h!=null?` (${v.draught_age_h}h old)`:'';
+    const mk=anchored
+      ? L.circleMarker([v.lat,v.lon],{radius:4,color:col,weight:1.5,fillOpacity:.35})
+      : L.marker([v.lat,v.lon],{icon:L.divIcon({className:'fmark',html:`<span style="color:${col};font-size:13px;display:inline-block;transform:rotate(${(v.cog||0)-90}deg);text-shadow:0 1px 2px #000">➤</span>`,iconSize:[10,10],iconAnchor:[5,5]})});
+    mk.bindPopup(
+      `<b>${v.name||'UNNAMED'}</b><br>${sancTag(v)}`+
+      `IMO ${v.imo||'—'} · ${v.flag||'?'} · ${v.type||'?'} · ${v.dwt?Math.round(v.dwt/1000)+'k DWT':'—'}<br>`+
+      `Draught: ${v.draught!=null?v.draught+' m'+age:'n/a'} · ${laden?'LADEN':v.cargo==='ballast'?'BALLAST':(v.cargo||'?')}<br>`+
+      `SOG ${v.sog!=null?v.sog+' kn':'—'} · COG ${v.cog!=null?Math.round(v.cog)+'°':'—'} · ${v.nav||''}<br>`+
+      `Broadcast dest: ${v.dest||'—'} <i>(claim — trajectory is the fact)</i><br>`+
+      `Last seen: ${v.seen||'—'}`).addTo(g);
+  });
+  setStatus(`${d.count||0} hulls · ${d.laden||0} laden/${d.ballast||0} ballast · `+
+    (OFAC?`${ofacN} official-listed`+(trkOnly?` · ${trkOnly} tracker-only`:''):`${d.sanctioned||0} sanctioned (tracker only)`)+
+    ` · AIS-only`); return g;
+}
+async function loadFleet(){
+  const d=await(await fetch('/.netlify/functions/usni-fleet',{signal:AbortSignal.timeout(15000)})).json();
+  const g=L.layerGroup();
+  (d.regions||[]).forEach(reg=>(reg.ships||[]).forEach((s,i)=>{
+    const carrier=/carrier|CVN/i.test((s.cls||'')+(s.hull||''));
+    L.marker([reg.lat+i*0.25,reg.lon+i*0.25],{icon:L.divIcon({className:'fmark',html:
+      `<span style="color:#4896ff;font-size:${carrier?18:12}px;text-shadow:0 1px 3px #000">${carrier?'◆':'▪'}</span>`+
+      `<div style="font:600 8px 'Barlow Condensed';color:#cfe0ff;text-shadow:0 1px 2px #000;white-space:nowrap">${s.name||''}</div>`,
+      iconSize:[8,8],iconAnchor:[4,4]})})
+     .bindPopup(`<b>${s.name||''}</b> ${s.hull||''}<br>${s.cls||''} · ${reg.region}`).addTo(g);
+  }));
+  setStatus('USNI: '+((d.battle_force||{}).deployed||'?')+' deployed'); return g;
+}
+async function loadFirms(){
+  const d=await(await fetch('/.netlify/functions/firms',{signal:AbortSignal.timeout(15000)})).json();
+  const g=L.layerGroup();
+  if(d.success)(d.points||[]).forEach(p=>{
+    L.circleMarker([p.lat,p.lon],{radius:Math.max(3,Math.min(14,Math.sqrt(p.frp)*1.6)),color:'#e01717',weight:1,fillColor:'#ff6b3d',fillOpacity:.5})
+     .bindPopup(`<b>THERMAL</b><br>FRP ${p.frp} MW<br>${p.date} (${p.dn==='D'?'day':'night'})<br>VIIRS ${p.sat}`).addTo(g);
+  });
+  setStatus('FIRMS: '+((d.points||[]).length)+' anomalies'+(d.success?'':' (no key)')); return g;
+}
+async function loadOpenSky(){
+  const d=await(await fetch('https://opensky-network.org/api/states/all?lamin=22&lomin=44&lamax=32&lomax=62',{signal:AbortSignal.timeout(15000)})).json();
+  const g=L.layerGroup();
+  (d.states||[]).forEach(s=>{
+    if(s[5]==null||s[6]==null)return;
+    L.marker([s[6],s[5]],{icon:L.divIcon({className:'fmark',html:`<span style="color:#b278ff;font-size:12px;display:inline-block;transform:rotate(${s[10]||0}deg);text-shadow:0 1px 2px #000">✈</span>`,iconSize:[10,10],iconAnchor:[5,5]})})
+     .bindPopup(`<b>${(s[1]||'').trim()||'—'}</b><br>${s[2]||''}<br>alt ${Math.round(s[7]||0)} m`).addTo(g);
+  });
+  setStatus('OpenSky: '+((d.states||[]).length)+' aircraft'); return g;
+}
+function loadPGSA(){
+  return L.layerGroup([L.polygon([[26.9,55.9],[26.9,56.9],[26.1,57.0],[25.9,56.2]],
+    {color:'#e0483c',weight:1.5,fillColor:'#e0483c',fillOpacity:.10,dashArray:'6 5'})
+    .bindPopup('<b>PGSA closure zone</b><br>administrative closure · ~89% interdicted')]);
+}
+let SCENE_DATE=new Date(Date.now()-30*36e5).toISOString().slice(0,10);
+function loadGIBS(){
+  // Thermal anomalies render via WMS (the WMTS Level9 tiles 404 for this layer).
+  return L.tileLayer.wms('https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi',{
+    layers:'VIIRS_NOAA20_Thermal_Anomalies_375m_All',format:'image/png',transparent:true,
+    time:SCENE_DATE,opacity:.85,attribution:'NASA GIBS'});
+}
+function loadSentinel(){
+  // GIBS daily VIIRS true-colour (keyless overview). For 10-20m scene detail use the
+  // SENTINEL SWIR / TRUE buttons, which render via the sentinel.js Process API function.
+  return L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_NOAA20_CorrectedReflectance_TrueColor/default/${SCENE_DATE}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,{maxNativeZoom:9,maxZoom:16,opacity:.9,tileSize:256});
+}
+// On-demand Sentinel-2 scene over current view (via sentinel.js) — 10-20m, true/SWIR.
+let s2Overlay=null;
+function loadS2Scene(mode){
+  const b=map.getBounds();
+  const bbox=[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].map(x=>x.toFixed(4)).join(',');
+  setStatus(`Sentinel-2 ${mode.toUpperCase()}: rendering ${SCENE_DATE}…`);
+  fetch(`/.netlify/functions/sentinel?bbox=${bbox}&date=${SCENE_DATE}&mode=${mode}`).then(r=>{
+    const ct=r.headers.get('Content-Type')||'';
+    if(ct.indexOf('image/png')===-1)return r.json().then(d=>{throw new Error(d.error||'no scene')});
+    return r.blob();
+  }).then(blob=>{
+    if(s2Overlay)map.removeLayer(s2Overlay);
+    s2Overlay=L.imageOverlay(URL.createObjectURL(blob),b,{opacity:1}).addTo(map);
+    setStatus(`Sentinel-2 ${mode.toUpperCase()} · ${SCENE_DATE} · Copernicus via Sentinel Hub`);
+  }).catch(e=>setStatus(`Sentinel-2: ${e.message} — try stepping the date`));
+}
+document.getElementById('s2tc').onclick=()=>loadS2Scene('truecolor');
+document.getElementById('s2swir').onclick=()=>loadS2Scene('swir');
+document.getElementById('s2clear').onclick=()=>{if(s2Overlay){map.removeLayer(s2Overlay);s2Overlay=null;setStatus('scene cleared');}};
+document.getElementById('scenedate').value=SCENE_DATE;
+document.getElementById('scenedate').max=SCENE_DATE;
+document.getElementById('scenedate').onchange=function(){SCENE_DATE=this.value;setStatus('scene date → '+SCENE_DATE);};
+window.addEventListener('resize',()=>map.invalidateSize());
+</script>
+</body>
+</html>
